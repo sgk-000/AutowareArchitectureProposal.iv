@@ -21,6 +21,7 @@ from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 from geometry_msgs.msg import PoseStamped
 from rclpy.duration import Duration
+import time
 
 class SelfPoseListener(Node):
     def __init__(self):
@@ -28,25 +29,32 @@ class SelfPoseListener(Node):
         self.tf_buffer = Buffer()
         self._tf_listener = TransformListener(self.tf_buffer, self)
         self._pub_pose = self.create_publisher(PoseStamped, "test_pose", 1)
-        self.timer = self.create_timer((1.0 / 10), self.get_current_pose)
+        #self.timer = self.create_timer(1, self.get_current_pose)
 
     def get_current_pose(self):
-        try:
-            tf = self.tf_buffer.lookup_transform("map", "base_link", rclpy.time.Time())
-            time = self.tf_buffer.get_latest_common_time("map", "base_link")
-            pose = SelfPoseListener.create_pose(time, "map", tf)
-            self._pub_pose.publish(pose)
-        except LookupException as e:
-            print(e)
-            return None
+        rate = self.create_rate(1)
+        while rclpy.ok():
+            try:
+                tf = self.tf_buffer.lookup_transform(
+                    "map", "base_link", rclpy.time.Time())
+                tf_time = self.tf_buffer.get_latest_common_time(
+                    "map", "base_link")
+                pose = SelfPoseListener.create_pose(tf_time, "map", tf)
+                self._pub_pose.publish(pose)
+                self.get_logger().info("pubilsh")
+                # return pose
+            except LookupException as e:
+                self.get_logger().info('transform not ready')
+                print(e)
+            time.sleep(1.0)
 
     @staticmethod
     def create_pose(time, frame_id, tf):
         pose = PoseStamped()
-
+        
         pose.header.stamp = time.to_msg()
         pose.header.frame_id = frame_id
-
+        
         pose.pose.position.x = tf.transform.translation.x
         pose.pose.position.y = tf.transform.translation.y
         pose.pose.position.z = tf.transform.translation.z
@@ -57,12 +65,15 @@ class SelfPoseListener(Node):
 
         return pose
 
+
 def main():
-        rclpy.init()
-        self_pose_listener = SelfPoseListener()
-        rclpy.spin(self_pose_listener)
-        self_pose_listener.destroy_node()
-        rclpy.shutdown()
+    rclpy.init()
+    self_pose_listener = SelfPoseListener()
+    self_pose_listener.get_current_pose()
+    # rclpy.spin(self_pose_listener)
+    self_pose_listener.destroy_node()
+    rclpy.shutdown()
+
 
 if __name__ == "__main__":
     main()
